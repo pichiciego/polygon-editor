@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Polygon Editor – Static App</title>
+
+  <!-- Leaflet CSS -->
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+  />
+
+  <!-- Leaflet.draw CSS -->
+  <link
+    rel="stylesheet"
+    href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css"
+  />
+
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    #top-bar {
+      padding: 6px 10px;
+      background: #f5f5f5;
+      border-bottom: 1px solid #ccc;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    #map {
+      width: 100%;
+      height: calc(100% - 42px);
+    }
+    button {
+      cursor: pointer;
+    }
+  </style>
+</head>
+
+<body>
+  <div id="top-bar">
+    <label>
+      <strong>Upload GeoJSON:</strong>
+      <input type="file" id="file-input" accept=".geojson,.json" />
+    </label>
+    <button id="export-btn">Export GeoJSON</button>
+  </div>
+
+  <div id="map"></div>
+
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <!-- Leaflet.draw JS -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
+
+  <script>
+    // --- Initialize map ---
+    const map = L.map('map').setView([38.88, -77.10], 12); // Arlington, VA as default
+
+    // Basemap
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
+
+    // Feature group for drawn + uploaded items
+    const drawnItems = new L.FeatureGroup();
+    map.addLayer(drawnItems);
+
+    // Draw controls
+    const drawControl = new L.Control.Draw({
+      edit: {
+        featureGroup: drawnItems,
+        remove: true
+      },
+      draw: {
+        polygon: true,
+        rectangle: true,
+        polyline: false,
+        circle: false,
+        circlemarker: false,
+        marker: false
+      }
+    });
+    map.addControl(drawControl);
+
+    // Handle new shapes
+    map.on(L.Draw.Event.CREATED, function (e) {
+      const layer = e.layer;
+      drawnItems.addLayer(layer);
+    });
+
+    // Handle edits
+    map.on(L.Draw.Event.EDITED, function (e) {
+      // Layers already updated in drawnItems
+    });
+
+    // Handle deletes
+    map.on(L.Draw.Event.DELETED, function (e) {
+      // Layers removed from drawnItems
+    });
+
+    // --- File upload: load GeoJSON into map ---
+    const fileInput = document.getElementById('file-input');
+
+    fileInput.addEventListener('change', function (event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function (e) {
+        try {
+          const geojson = JSON.parse(e.target.result);
+
+          // Clear existing layers
+          drawnItems.clearLayers();
+
+          // Add new layers
+          const layer = L.geoJSON(geojson, {
+            onEachFeature: function (feature, layer) {
+              drawnItems.addLayer(layer);
+            }
+          });
+
+          // Fit map to data if possible
+          try {
+            map.fitBounds(drawnItems.getBounds(), { maxZoom: 18 });
+          } catch (err) {
+            console.warn('Could not fit bounds:', err);
+          }
+        } catch (err) {
+          alert('Invalid GeoJSON file.');
+          console.error(err);
+        }
+      };
+      reader.readAsText(file);
+    });
+
+    // --- Export GeoJSON: download drawnItems as file ---
+    const exportBtn = document.getElementById('export-btn');
+
+    exportBtn.addEventListener('click', function () {
+      const data = drawnItems.toGeoJSON();
+      const blob = new Blob([JSON.stringify(data, null, 2)], {
+        type: 'application/json'
+      });
+      const url = URL.createObjectURL(blob);
+
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'polygons.geojson';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    });
+  </script>
+</body>
+</html>
